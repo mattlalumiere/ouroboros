@@ -69,7 +69,7 @@ jobs:
       - name: Checksums
         run: cd out && sha256sum * > SHA256SUMS
       - name: Build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "out/*"
       - uses: softprops/action-gh-release@v2

@@ -96,7 +96,7 @@ $('go').onclick = async () => {
   $('go').disabled = $('preview').disabled = false;
   $('msg').textContent = '';
   if (s.state === 'error') return fail(s.message);
-  draw({ progress: { Total: 1, Bytes: 1, Files: 0 } });
+  draw(s, true);
   $('msg').className = 'ok';
   $('msg').textContent = s.message;
   if (s.warnings && s.warnings.length) $('msg').append(el('div', { class: 'small' }, s.warnings.join('\n')));

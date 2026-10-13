@@ -161,9 +161,9 @@ function progressView(host) {
   const fill = el('div');
   const text = el('div', { class: 'small' });
   host.replaceChildren(el('div', { class: 'bar' }, fill), text);
-  return s => {
+  return (s, complete) => {
     const p = s.progress || {};
-    const pct = p.Total ? Math.min(100, (p.Bytes / p.Total) * 100) : 0;
+    const pct = complete ? 100 : p.Total ? Math.min(100, (p.Bytes / p.Total) * 100) : 0;
     fill.style.width = pct + '%';
     text.textContent = `${p.Files || 0} files, ${fmtSize(p.Bytes || 0)}${p.Total ? ' of ' + fmtSize(p.Total) : ''}${p.Current ? ' • ' + p.Current : ''}`;
   };

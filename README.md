@@ -19,6 +19,21 @@ Both the packer and the generated executables work on Windows, Linux and macOS
 A packer built on one system can produce executables for any of the six
 supported platforms, for example a Windows `.exe` made on Linux.
 
+## Screenshots
+
+Packing a folder and a file into `project-backup`:
+
+![The packer](docs/screenshots/packer.png)
+
+Running `project-backup` on another machine. The contents can be previewed
+once the passphrase is entered:
+
+![The unpacker with a content preview](docs/screenshots/unpacker.png)
+
+After extracting, the original folder structure is back in the chosen folder:
+
+![The unpacker after extracting](docs/screenshots/unpacker-done.png)
+
 ## Options
 
 When packing:

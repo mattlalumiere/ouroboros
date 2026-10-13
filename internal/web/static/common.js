@@ -178,3 +178,18 @@ function quitButton() {
     },
   }, 'Quit');
 }
+
+/* Shows a note under a password field while Caps Lock is on. */
+function capsWarning(input) {
+  const note = el('div', { class: 'error small' }, 'Caps Lock is on, so the passphrase will be typed in capitals.');
+  note.hidden = true;
+  const check = e => { if (e.getModifierState) note.hidden = !e.getModifierState('CapsLock'); };
+  input.addEventListener('keydown', check);
+  input.addEventListener('keyup', check);
+  input.addEventListener('blur', () => { note.hidden = true; });
+  input.after(note);
+}
+
+/* Spaces at either end are easy to paste by accident but are part of the passphrase. */
+function edgeSpace(value) { return value !== value.trim(); }
+const EDGE_NOTE = 'The passphrase starts or ends with a space. That space counts, so make sure it is intended.';

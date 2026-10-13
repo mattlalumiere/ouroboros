@@ -100,6 +100,16 @@ Needs Go 1.26 or newer.
 `go build ./cmd/ouroboros` works too, but that packer will not have any
 unpackers to embed until `build.sh` has run once.
 
+## Releases
+
+The `release` workflow builds the downloads: a `.tar.gz` for Linux, a `.zip`
+for Windows, and a `.dmg` for macOS holding a universal (Intel and Apple
+silicon) binary. Run it from the Actions tab, or push a tag like `v0.1.0` to
+publish the files on a GitHub release.
+
+On macOS the first launch of the unsigned binary needs a right click, Open, to
+get past Gatekeeper.
+
 ## Layout
 
     cmd/ouroboros      the packer

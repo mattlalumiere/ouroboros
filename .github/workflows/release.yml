@@ -1,0 +1,64 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  linux-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: ./build.sh
+      - name: Package
+        run: |
+          mkdir out
+          for t in linux-amd64 linux-arm64; do
+            tar -czf out/ouroboros-$t.tar.gz -C dist ouroboros-$t
+          done
+          for t in windows-amd64 windows-arm64; do
+            (cd dist && zip -q ../out/ouroboros-$t.zip ouroboros-$t.exe)
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-windows
+          path: out/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: ./build.sh
+      - name: Make a universal binary and the disk image
+        run: |
+          mkdir -p stage out
+          lipo -create -output stage/ouroboros dist/ouroboros-darwin-amd64 dist/ouroboros-darwin-arm64
+          chmod +x stage/ouroboros
+          cp README.md stage/README.md
+          hdiutil create -volname Ouroboros -srcfolder stage -ov -format UDZO out/ouroboros-macos.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: out/
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux-windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*

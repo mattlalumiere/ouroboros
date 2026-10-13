@@ -1,2 +1,3 @@
 /dist/
 /internal/stubs/bin/*.gz
+/internal/stubs/bin/MANIFEST

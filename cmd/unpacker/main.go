@@ -47,6 +47,7 @@ func main() {
 }
 
 func runCLI(list bool, dest, conflict, keyfile string, keepModes bool) error {
+	app.HandleInterrupt()
 	pass, err := app.Passphrase(false)
 	if err != nil {
 		return err
@@ -87,6 +88,7 @@ func runCLI(list bool, dest, conflict, keyfile string, keepModes bool) error {
 }
 
 func runWeb(noBrowser bool) error {
+	os.Unsetenv("OUROBOROS_PASSPHRASE")
 	srv, err := web.New("unpacker.html")
 	if err != nil {
 		return err

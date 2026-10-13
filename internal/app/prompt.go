@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"golang.org/x/term"
 )
@@ -15,6 +17,8 @@ import (
 // when set, otherwise it is read from the terminal without echo.
 func Passphrase(confirm bool) (string, error) {
 	if v := os.Getenv("OUROBOROS_PASSPHRASE"); v != "" {
+		// Keep it out of /proc and out of anything started later.
+		os.Unsetenv("OUROBOROS_PASSPHRASE")
 		return v, nil
 	}
 	fd := int(os.Stdin.Fd())
@@ -59,4 +63,16 @@ func Fatal(err error) {
 		bufio.NewReader(os.Stdin).ReadString('\n')
 	}
 	os.Exit(1)
+}
+
+// HandleInterrupt removes unfinished output when the user presses Ctrl-C in
+// command line mode.
+func HandleInterrupt() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		Cleanup()
+		os.Exit(130)
+	}()
 }

@@ -64,3 +64,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; }
 td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
 td.num { text-align: right; color: var(--muted); }
 .tree { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; margin-top: 10px; }
+.grow { flex: 1; }
+label.flush { margin: 0; }
+label.pad-top { margin-top: 34px; }
+.ok { white-space: pre-wrap; overflow-wrap: anywhere; }

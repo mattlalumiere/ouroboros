@@ -5,9 +5,13 @@ package stubs
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"path"
 	"runtime"
 	"sort"
 	"strings"
@@ -55,15 +59,40 @@ func Available() []Target {
 	return out
 }
 
-// Open returns the uncompressed unpacker program for t.
+// Open returns the uncompressed unpacker program for t. The embedded file is
+// checked against the manifest written by build.sh first, which catches a
+// stale or hand edited stub before it is copied into someone's output.
 func Open(t Target) (io.Reader, error) {
 	raw, err := files.ReadFile(entryName(t))
 	if err != nil {
 		return nil, fmt.Errorf("no unpacker is embedded for %s, rebuild with build.sh", t)
+	}
+	if err := verify(path.Base(entryName(t)), raw); err != nil {
+		return nil, err
 	}
 	zr, err := gzip.NewReader(bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
 	return zr, nil
+}
+
+// verify compares raw with the SHA-256 recorded for name in the manifest.
+func verify(name string, raw []byte) error {
+	manifest, err := files.ReadFile("bin/MANIFEST")
+	if err != nil {
+		return errors.New("the unpacker manifest is missing, rebuild with build.sh")
+	}
+	sum := sha256.Sum256(raw)
+	want := hex.EncodeToString(sum[:])
+	for _, line := range strings.Split(string(manifest), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && strings.TrimPrefix(f[1], "*") == name {
+			if f[0] == want {
+				return nil
+			}
+			return fmt.Errorf("the embedded unpacker %s does not match its recorded checksum, rebuild with build.sh", name)
+		}
+	}
+	return fmt.Errorf("the embedded unpacker %s is not listed in the manifest, rebuild with build.sh", name)
 }

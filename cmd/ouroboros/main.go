@@ -69,6 +69,7 @@ func runCLI(paths []string, out, target, level, keyfile string, del bool) error 
 	dir, name := splitPath(out)
 	req.OutDir, req.OutName = dir, name
 
+	app.HandleInterrupt()
 	pass, err := app.Passphrase(true)
 	if err != nil {
 		return err
@@ -103,6 +104,8 @@ func splitPath(p string) (dir, name string) {
 }
 
 func runWeb(noBrowser bool) error {
+	// Nothing in web mode needs the variable, and the browser launcher would inherit it.
+	os.Unsetenv("OUROBOROS_PASSPHRASE")
 	srv, err := web.New("packer.html")
 	if err != nil {
 		return err

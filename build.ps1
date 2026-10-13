@@ -101,8 +101,13 @@ function Build-For {
 }
 
 $stubDir = Join-Path 'internal' (Join-Path 'stubs' 'bin')
-Get-ChildItem -LiteralPath $stubDir -Include 'unpacker-*.gz', 'MANIFEST' -ErrorAction SilentlyContinue |
-    Remove-Item -Force
+# Remove only the generated files. README.txt has to stay, Go needs at least one
+# file in this folder to embed it.
+Remove-Item -Path (Join-Path $stubDir 'unpacker-*.gz'), (Join-Path $stubDir 'MANIFEST') `
+    -Force -ErrorAction SilentlyContinue
+if (-not (Test-Path -LiteralPath (Join-Path $stubDir 'README.txt'))) {
+    throw "$stubDir\README.txt is missing. Restore it with: git checkout -- $stubDir"
+}
 New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
 
 # Small helper that compresses and checksums the same way on every system.

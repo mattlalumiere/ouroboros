@@ -48,6 +48,10 @@ jobs:
       - name: Build with the cmd wrapper
         shell: cmd
         run: build.cmd host
+      - name: Show the unpacker folder if a build failed
+        if: failure()
+        shell: pwsh
+        run: Get-ChildItem -Force internal\stubs\bin | Format-Table Name, Length
       - name: Pack and unpack with the built program
         shell: pwsh
         run: |

@@ -68,6 +68,8 @@ func NeedsKeyfile() (bool, error) {
 
 // List decrypts the attached archive and returns what it contains.
 func List(pass, keyfile string) ([]archive.Item, error) {
+	kdf.Lock()
+	defer kdf.Unlock()
 	key, err := ReadKeyfile(keyfile)
 	if err != nil {
 		return nil, err
@@ -82,6 +84,8 @@ func List(pass, keyfile string) ([]archive.Item, error) {
 
 // Extract unpacks the attached archive.
 func Extract(req ExtractRequest, progress func(archive.Progress)) (string, []string, error) {
+	kdf.Lock()
+	defer kdf.Unlock()
 	key, err := ReadKeyfile(req.Keyfile)
 	if err != nil {
 		return "", nil, err

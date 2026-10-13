@@ -96,7 +96,7 @@ class Browser {
       el('button', { type: 'button', onclick: () => this.go(L ? L.home : '') }, 'Home'),
       ...(L ? L.roots.map(r => el('button', { type: 'button', onclick: () => this.go(r) }, r)) : []),
       pathBox,
-      el('label', { class: 'inline', style: 'margin:0' },
+      el('label', { class: 'inline flush' },
         el('input', { type: 'checkbox', checked: this.showHidden, onchange: e => { this.showHidden = e.target.checked; this.render(); } }), 'Hidden'),
       this.mode === 'dir' ? el('button', { type: 'button', onclick: () => this.newFolder() }, 'New folder') : '',
     );

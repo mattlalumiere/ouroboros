@@ -9,6 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
+	"unicode"
 
 	"github.com/klauspost/compress/zstd"
 )
@@ -49,6 +52,18 @@ type PackOptions struct {
 	Keyfile    []byte // optional extra secret
 	Level      Level
 	Progress   func(Progress)
+	// Exclude lists files that must never be packed, such as the output being
+	// written. They are matched with os.SameFile, so links and case tricks
+	// cannot hide them.
+	Exclude []os.FileInfo
+}
+
+// Archived is something that was stored in the archive, as it was on disk.
+type Archived struct {
+	Path    string
+	IsDir   bool
+	Size    int64
+	ModTime time.Time
 }
 
 // PackResult summarises a finished pack run.
@@ -57,6 +72,7 @@ type PackResult struct {
 	Dirs     int
 	Bytes    int64
 	Warnings []string
+	Entries  []Archived // everything that was stored, in archive order
 }
 
 const totalKey = "OUROBOROS.total"
@@ -74,7 +90,7 @@ func Pack(w io.Writer, paths []string, opt PackOptions) (*PackResult, error) {
 		return nil, fmt.Errorf("a passphrase is required")
 	}
 	res := &PackResult{}
-	entries, total, err := collect(paths, res)
+	entries, total, err := collect(paths, res, opt.Exclude)
 	if err != nil {
 		return nil, err
 	}
@@ -123,12 +139,14 @@ func Pack(w io.Writer, paths []string, opt PackOptions) (*PackResult, error) {
 				return nil, err
 			}
 			res.Dirs++
+			res.Entries = append(res.Entries, Archived{Path: e.abs, IsDir: true})
 			continue
 		}
 		report(e.name)
 		if err := writeFile(tw, hdr, e.abs, &prog, opt.Progress); err != nil {
 			return nil, err
 		}
+		res.Entries = append(res.Entries, Archived{Path: e.abs, Size: hdr.Size, ModTime: hdr.ModTime})
 		res.Files++
 		res.Bytes += hdr.Size
 		prog.Files++
@@ -155,6 +173,7 @@ func writeFile(tw *tar.Writer, hdr *tar.Header, abs string, prog *Progress, cb f
 		return err
 	}
 	hdr.Size = st.Size()
+	hdr.ModTime = st.ModTime()
 	if err := tw.WriteHeader(hdr); err != nil {
 		return err
 	}
@@ -170,6 +189,15 @@ func writeFile(tw *tar.Writer, hdr *tar.Header, abs string, prog *Progress, cb f
 	}
 	if n != hdr.Size {
 		return fmt.Errorf("%s changed while it was being read", abs)
+	}
+	// Growth and in place edits do not show up in the byte count, so look at
+	// the file again once it has been read.
+	after, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if after.Size() != st.Size() || !after.ModTime().Equal(st.ModTime()) {
+		return fmt.Errorf("%s changed while it was being read, try again when nothing is writing to it", abs)
 	}
 	return nil
 }
@@ -188,7 +216,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 }
 
 // collect walks every selected path and returns the entries in archive order.
-func collect(paths []string, res *PackResult) ([]entry, int64, error) {
+func collect(paths []string, res *PackResult, exclude []os.FileInfo) ([]entry, int64, error) {
 	var out []entry
 	var total int64
 	seen := map[string]string{}
@@ -201,10 +229,11 @@ func collect(paths []string, res *PackResult) ([]entry, int64, error) {
 		if base == string(filepath.Separator) || base == "." || base == filepath.VolumeName(abs)+string(filepath.Separator) {
 			return nil, 0, fmt.Errorf("cannot pack a filesystem root (%s), pick a folder or file inside it", abs)
 		}
-		if prev, dup := seen[base]; dup {
+		key := strings.ToLower(base) // Windows and macOS treat names that differ by case as the same
+		if prev, dup := seen[key]; dup {
 			return nil, 0, fmt.Errorf("%s and %s would both be stored as %q, pack them separately", prev, abs, base)
 		}
-		seen[base] = abs
+		seen[key] = abs
 
 		err = filepath.WalkDir(abs, func(cur string, d fs.DirEntry, werr error) error {
 			if werr != nil {
@@ -221,6 +250,11 @@ func collect(paths []string, res *PackResult) ([]entry, int64, error) {
 			info, err := d.Info()
 			if err != nil {
 				return err
+			}
+			for _, ex := range exclude {
+				if os.SameFile(info, ex) {
+					return nil
+				}
 			}
 			switch {
 			case info.IsDir(), info.Mode().IsRegular():
@@ -245,3 +279,20 @@ func collect(paths []string, res *PackResult) ([]entry, int64, error) {
 }
 
 func newBufReader(r io.Reader) *bufio.Reader { return bufio.NewReaderSize(r, 128*1024) }
+
+// Printable makes an archive name safe to show in a terminal or page. Control
+// characters, line breaks and direction overrides are written as escapes so
+// a crafted name cannot move the cursor, fake extra lines or reorder text.
+func Printable(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r == unicode.ReplacementChar, unicode.IsControl(r), unicode.Is(unicode.Cf, r),
+			r == '\u2028', r == '\u2029':
+			fmt.Fprintf(&b, "\\u{%X}", r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}

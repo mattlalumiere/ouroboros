@@ -23,6 +23,7 @@ import (
 	"io"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/text/unicode/norm"
 )
 
 var magic = [8]byte{'O', 'U', 'R', 'O', 'B', 'O', 'R', '1'}
@@ -33,8 +34,16 @@ const (
 	headerSize   = 8 + 1 + 1 + 4 + 1 + 16 + 4 + 1
 	saltSize     = 16
 	chunkLog2    = 16 // 64 KiB of plaintext per chunk
-	maxMemoryKiB = 1 << 20
 	maxChunkLog2 = 24
+
+	// The key derivation settings in the header are read before anything can
+	// be authenticated, so a crafted archive could otherwise make the reader
+	// burn minutes of CPU or gigabytes of memory. Anything outside these
+	// bounds is refused, and the packer stays well inside them.
+	minMemoryKiB = 64 * 1024
+	maxMemoryKiB = 512 * 1024
+	maxTime      = 10
+	maxThreads   = 16
 
 	defaultTime    = 3
 	defaultMemory  = 256 * 1024 // KiB
@@ -82,23 +91,31 @@ func parseHeader(raw []byte) (*header, error) {
 	copy(h.salt[:], raw[15:15+saltSize])
 	copy(h.noncePre[:], raw[15+saltSize:19+saltSize])
 	h.chunkLog2 = raw[19+saltSize]
-	if h.time == 0 || h.threads == 0 || h.memoryKiB == 0 || h.memoryKiB > maxMemoryKiB ||
+	if h.time == 0 || h.time > maxTime || h.threads == 0 || h.threads > maxThreads ||
+		h.memoryKiB < minMemoryKiB || h.memoryKiB > maxMemoryKiB ||
 		h.chunkLog2 < 10 || h.chunkLog2 > maxChunkLog2 {
-		return nil, errors.New("archive header has invalid parameters")
+		return nil, errors.New("archive header has settings outside the supported range")
 	}
 	return h, nil
 }
 
-// secret combines the passphrase with an optional keyfile. The keyfile is
-// reduced to a hash and used as an HMAC key over the passphrase, so a missing
-// or different keyfile gives a completely different key.
+// keyfileLabel keeps the keyfile mixing separate from any other use of HMAC.
+const keyfileLabel = "ouroboros v1 keyfile\x00"
+
+// secret combines the passphrase with an optional keyfile. The passphrase is
+// normalised to NFC first, so the same visible text typed on macOS and on
+// Windows or Linux gives the same key. The keyfile is reduced to a hash and
+// used as an HMAC key over the passphrase, so a missing or different keyfile
+// gives a completely different key.
 func secret(passphrase string, keyfile []byte) []byte {
+	pass := []byte(norm.NFC.String(passphrase))
 	if keyfile == nil {
-		return []byte(passphrase)
+		return pass
 	}
 	kh := sha256.Sum256(keyfile)
 	m := hmac.New(sha256.New, kh[:])
-	m.Write([]byte(passphrase))
+	m.Write([]byte(keyfileLabel))
+	m.Write(pass)
 	return m.Sum(nil)
 }
 

@@ -8,19 +8,25 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 TARGETS=(windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64)
-FLAGS=(-trimpath -ldflags "-s -w")
+FLAGS=(-trimpath -buildvcs=false -ldflags "-s -w")
 export CGO_ENABLED=0
 
-rm -f internal/stubs/bin/*.gz
+sha256() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+
+rm -f internal/stubs/bin/*.gz internal/stubs/bin/MANIFEST
 mkdir -p dist
 
 echo "Building unpackers"
 for t in "${TARGETS[@]}"; do
   os=${t%/*}; arch=${t#*/}
   GOOS=$os GOARCH=$arch go build "${FLAGS[@]}" -o "dist/.stub" ./cmd/unpacker
-  gzip -9 -c dist/.stub > "internal/stubs/bin/unpacker-$os-$arch.gz"
+  # -n leaves out the file name and timestamp, so the same input gives the same bytes
+  gzip -9 -n -c dist/.stub > "internal/stubs/bin/unpacker-$os-$arch.gz"
 done
 rm -f dist/.stub
+
+# The packer checks the embedded unpackers against this list before using them.
+(cd internal/stubs/bin && sha256 unpacker-*.gz > MANIFEST)
 
 echo "Building packers"
 if [ "${1:-}" = "host" ]; then

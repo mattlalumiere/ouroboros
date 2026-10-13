@@ -10,7 +10,7 @@ Both the packer and the generated executables work on Windows, Linux and macOS
 ## How it works
 
 1. Run the packer. A page opens in your browser (served from the program
-   itself, only reachable from your own machine) where you browse for files and
+   itself on your own computer) where you browse for files and
    folders, set a passphrase and pick the output location.
 2. The packer writes a single executable. Send it to anyone.
 3. Running that executable opens a similar page. Enter the passphrase, choose a
@@ -63,6 +63,11 @@ either program with `-h` for all flags.
 ## Security design
 
 - Key derivation: Argon2id (256 MiB, 3 passes, 4 lanes) with a random salt.
+  An archive that asks for settings outside 64 to 512 MiB, 1 to 10 passes or
+  1 to 16 lanes is refused before any work is done, so a crafted file cannot
+  exhaust a machine.
+- The passphrase is normalised (Unicode NFC) so the same text typed on macOS,
+  Windows or Linux gives the same key.
 - Encryption: AES-256-GCM over 64 KiB chunks. The header is authenticated, the
   nonce contains a chunk counter, and the last chunk is flagged. A wrong
   passphrase is detected right away, and tampering, reordering or truncation
@@ -71,23 +76,69 @@ either program with `-h` for all flags.
   total size of the archive and whether a keyfile is needed are visible.
 - The archive is a zstd compressed tar stream, so compression happens before
   encryption.
-- Extraction refuses entries that would land outside the destination folder.
-- The local web page only listens on 127.0.0.1, requires a random per run
-  token, and rejects requests with an unexpected Host header.
+- Extraction is confined to the destination folder with Go's `os.Root`. Names
+  with `..`, absolute paths and Windows drive or device names are refused, and
+  links that already sit in the destination are never followed, even in
+  overwrite mode. Setuid and setgid bits are never restored. A failed run does
+  not leave a truncated file behind.
+- Delete originals is cautious. It only runs after the new file has been read
+  back completely, it removes only the files that were stored and still match
+  what was packed, it removes folders only when they are empty, and it does
+  nothing at all if anything was skipped (for example a symbolic link).
+- The packer refuses to save its output inside a folder it is packing, also
+  through links and on case insensitive systems, and refuses a keyfile that is
+  inside the packed folders.
+- Names shown to you from an archive have control and direction characters
+  escaped.
 
-The strength of the result is the strength of the passphrase. There is no
-recovery if it is lost.
+### How the local page is protected
 
-## Limits
+The page is served by the program itself on `127.0.0.1` with a random port.
+That keeps it off the network, but other user accounts on the same computer can
+still connect to a loopback port, so the page defends itself:
 
-- Symbolic links and special files (sockets, devices) are skipped while
-  packing and listed as warnings.
-- Ownership is not stored. Permissions and modification times are.
-- On macOS and Windows an unsigned program may trigger a Gatekeeper or
-  SmartScreen warning the first time it runs. Code signing is not part of this
-  project.
-- The executables are around 8 MB because they contain the web interface and
-  the crypto code.
+- The address printed at startup contains a link token that works once. The
+  first visit trades it for a session cookie (`HttpOnly`, `SameSite=Strict`)
+  and redirects to a clean address, so the token does not stay in the browser
+  history and a copy found in a process list is already dead.
+- Every API call needs that cookie and a second token in a header, and the
+  `Host` header must match, which stops other websites and DNS rebinding.
+- Strict security headers are sent (no inline scripts, no framing, no
+  referrer), and only four static files are served.
+- The program closes itself after 30 minutes without use, and refuses to quit
+  while a job is running.
+- `OUROBOROS_PASSPHRASE` is cleared from the environment as soon as it has
+  been read.
+
+On a machine shared with people you do not trust, prefer the command line mode.
+
+### What this does and does not protect against
+
+Protects against:
+
+- someone who gets the executable and does not know the passphrase,
+- accidental or malicious changes to the file (they are detected),
+- a malicious archive trying to write outside the folder you chose.
+
+Does not protect against:
+
+- **A swapped program.** The recipient runs an executable and types the
+  passphrase into it. Nothing signs that executable, so someone who replaces
+  it in transit can capture the passphrase, and a fake file that merely looks
+  like one of ours is a good lure. Only run files from people you trust, and
+  compare the SHA-256 that the packer shows with the sender over a different
+  channel (a call, a message app).
+- **A compromised computer** on either end.
+- **A weak passphrase.** The archive can be attacked offline, and Argon2 only
+  slows that down. There is no recovery if the passphrase is lost.
+- **Size analysis.** The total size of the archive is visible.
+- **Memory inspection.** Go cannot wipe the passphrase from memory, and it may
+  reach swap.
+- **An archive that expands enormously.** Entry counts and the decompression
+  window are capped, but total extracted size is not, so pick a destination
+  with enough free space. Check the preview first.
+- **Unwanted names.** An archive can contain names like `.bashrc` or
+  `.ssh/authorized_keys`. Extract into an empty folder, not your home folder.
 
 ## Building
 

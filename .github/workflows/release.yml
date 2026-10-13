@@ -5,6 +5,9 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   linux-windows:
     runs-on: ubuntu-latest
@@ -12,7 +15,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
       - run: ./build.sh
       - name: Package
         run: |
@@ -34,7 +38,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
       - run: ./build.sh
       - name: Make a universal binary and the disk image
         run: |
@@ -54,11 +59,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS
+      - name: Build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "out/*"
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*

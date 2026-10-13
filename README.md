@@ -170,6 +170,13 @@ On Windows, from PowerShell or a normal command prompt:
     .\build.ps1 host    # only the packer for this machine
     build.cmd host      # same thing, from cmd.exe, no policy change needed
 
+Both scripts start by checking that Go is installed and new enough (the
+version comes from `go.mod`), then download and verify the libraries listed in
+`go.mod` and `go.sum`, so there is nothing to install by hand except Go itself.
+If Go is missing they say how to get it (on Windows, `winget install
+GoLang.Go`). If your Go is older than needed, recent Go versions fetch the
+right toolchain on their own, which needs internet access for the first run.
+
 If PowerShell refuses to run the script, use `build.cmd`, which starts it with
 the execution policy bypassed for that one run. Git Bash and WSL can use
 `build.sh` as well. If `./build.sh` fails with `bash\r: No such file or

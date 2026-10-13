@@ -28,8 +28,55 @@ $targets = @(
 $flags = @('-trimpath', '-buildvcs=false', '-ldflags', '-s -w')
 $env:CGO_ENABLED = '0'
 
+# Preflight: make sure Go is there and new enough, then fetch the libraries.
+# The Go version and the libraries are listed in go.mod and go.sum.
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    throw 'Go was not found. Install Go 1.26 or newer from https://go.dev/dl/ and open a new terminal.'
+    $hint = 'Install Go from https://go.dev/dl/ and open a new terminal.'
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        $hint = 'Install it with:  winget install GoLang.Go   (or from https://go.dev/dl/)' +
+            "`nthen open a new terminal."
+    }
+    throw "Go was not found on your PATH.`n$hint"
+}
+
+# Turns "go1.26" or "1.26.3" into a version object, with a missing patch as 0.
+function ConvertTo-GoVersion {
+    param([string]$Text)
+    if ($Text -notmatch '(\d+)\.(\d+)(?:\.(\d+))?') { throw "cannot read the Go version from '$Text'" }
+    $patch = 0
+    if ($Matches[3]) { $patch = [int]$Matches[3] }
+    return [version]::new([int]$Matches[1], [int]$Matches[2], $patch)
+}
+
+$goMod = Get-Content -LiteralPath 'go.mod' | Where-Object { $_ -match '^go\s+\S+' } | Select-Object -First 1
+$required = ConvertTo-GoVersion ($goMod -replace '^go\s+', '')
+# Windows PowerShell 5.1 turns anything Go prints on stderr (like "downloading
+# go1.26.0") into a terminating error when it is redirected, so relax that here.
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$goVersionText = (& go env GOVERSION 2>&1) -join ' '
+$goExit = $LASTEXITCODE
+$ErrorActionPreference = $previousPreference
+if ($goExit -ne 0) {
+    throw "Go could not start: $goVersionText`nIf it is trying to download a newer Go, check your internet connection, or install Go $required or newer yourself from https://go.dev/dl/."
+}
+$have = ConvertTo-GoVersion $goVersionText
+Write-Host "Go $have found, this project needs Go $required or newer"
+if ($have -lt $required) {
+    if ((& go env GOTOOLCHAIN) -eq 'local') {
+        throw "Go $have is too old and GOTOOLCHAIN is set to local. Install Go $required or newer."
+    }
+    Write-Host 'Go will download the newer toolchain itself on the first build (needs internet).'
+}
+
+Write-Host 'Checking libraries'
+& go mod download
+if ($LASTEXITCODE -ne 0) {
+    throw "could not download the libraries. Check your internet connection and proxy settings (GOPROXY is $(& go env GOPROXY))."
+}
+& go mod verify | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "a downloaded library does not match go.sum. Run 'go clean -modcache' and try again."
 }
 
 # Runs go with the arguments given and stops the script if it fails.

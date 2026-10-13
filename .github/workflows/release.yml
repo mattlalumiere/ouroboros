@@ -27,7 +27,7 @@ jobs:
           for t in windows-amd64 windows-arm64; do
             (cd dist && zip -q ../out/ouroboros-$t.zip ouroboros-$t.exe)
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-windows
           path: out/
@@ -48,7 +48,7 @@ jobs:
           chmod +x stage/ouroboros
           cp README.md stage/README.md
           hdiutil create -volname Ouroboros -srcfolder stage -ov -format UDZO out/ouroboros-macos.dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: out/

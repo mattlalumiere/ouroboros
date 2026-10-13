@@ -35,6 +35,9 @@ func Passphrase(confirm bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if p != strings.TrimSpace(p) {
+		fmt.Fprintln(os.Stderr, "warning: the passphrase starts or ends with whitespace, which counts as part of it")
+	}
 	if confirm {
 		again, err := read("Repeat passphrase: ")
 		if err != nil {

@@ -26,6 +26,7 @@
       <div><label for="pw2">Repeat passphrase</label><input id="pw2" type="password" autocomplete="new-password"></div>
     </div>
     <label class="inline"><input type="checkbox" id="show"> Show passphrase</label>
+    <div class="small" id="pwmatch"></div>
     <div class="hint" id="pwhint">The passphrase cannot be recovered. If you lose it, the data is gone.</div>
     <label>Keyfile (optional)</label>
     <div class="row">
@@ -90,10 +91,21 @@ function outPreview() {
 }
 
 $('show').onchange = e => { $('pw').type = $('pw2').type = e.target.checked ? 'text' : 'password'; };
-$('pw').oninput = () => {
-  const n = $('pw').value.length;
-  $('pwhint').textContent = n && n < 12 ? 'Short passphrases are easier to guess. Twelve or more characters is a good target.' : 'The passphrase cannot be recovered. If you lose it, the data is gone.';
-};
+const PW_HINT = 'The passphrase cannot be recovered. If you lose it, the data is gone.';
+function checkPw() {
+  const a = $('pw').value, b = $('pw2').value;
+  const hint = $('pwhint'), match = $('pwmatch');
+  hint.className = 'hint';
+  if (edgeSpace(a) || edgeSpace(b)) { hint.className = 'error small'; hint.textContent = EDGE_NOTE; }
+  else if (a && a.length < 12) hint.textContent = 'Short passphrases are easier to guess. Twelve or more characters is a good target.';
+  else hint.textContent = PW_HINT;
+  if (!b) match.textContent = '';
+  else if (a === b) { match.className = 'small ok'; match.textContent = 'Both entries match.'; }
+  else { match.className = 'small error'; match.textContent = 'The entries do not match yet.'; }
+}
+$('pw').oninput = $('pw2').oninput = checkPw;
+capsWarning($('pw'));
+capsWarning($('pw2'));
 $('pickkey').onclick = async () => { const p = await pick({ mode: 'file', title: 'Choose a keyfile', start: info.home }); if (p) $('keyfile').value = p; };
 $('clearkey').onclick = () => { $('keyfile').value = ''; };
 $('pickout').onclick = async () => { const p = await pick({ mode: 'dir', title: 'Where should the executable be saved?', start: $('outdir').value }); if (p) { $('outdir').value = p; outPreview(); } };
@@ -136,6 +148,7 @@ $('go').onclick = async () => {
   msg.textContent = s.message;
   if (s.warnings && s.warnings.length) msg.append(el('div', { class: 'small' }, s.warnings.join('\n')));
   $('pw').value = $('pw2').value = '';
+  checkPw();
 };
 function fail(text) { $('msg').className = 'error'; $('msg').textContent = text; }
 </script>

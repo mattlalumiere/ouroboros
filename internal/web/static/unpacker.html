@@ -16,6 +16,7 @@
     <label for="pw">Passphrase</label>
     <input id="pw" type="password" autocomplete="current-password">
     <label class="inline"><input type="checkbox" id="show"> Show passphrase</label>
+    <div class="error small" id="pwhint" hidden></div>
     <div id="keyblock" hidden>
       <label>Keyfile (required for this archive)</label>
       <div class="row"><input type="text" id="keyfile" readonly placeholder="None chosen"><button type="button" id="pickkey">Choose...</button></div>
@@ -54,6 +55,11 @@ const $ = id => document.getElementById(id);
 let info;
 
 $('show').onchange = e => { $('pw').type = e.target.checked ? 'text' : 'password'; };
+capsWarning($('pw'));
+$('pw').addEventListener('input', () => {
+  $('pwhint').hidden = !edgeSpace($('pw').value);
+  $('pwhint').textContent = EDGE_NOTE;
+});
 $('pickkey').onclick = async () => { const p = await pick({ mode: 'file', title: 'Choose the keyfile', start: info.home }); if (p) $('keyfile').value = p; };
 $('pickdest').onclick = async () => { const p = await pick({ mode: 'dir', title: 'Where should the files be extracted?', start: $('dest').value }); if (p) $('dest').value = p; };
 $('quitslot').append(quitButton());

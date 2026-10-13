@@ -41,6 +41,8 @@ When packing:
 - compression level (fast to smallest)
 - target platform
 - optional keyfile that is needed in addition to the passphrase
+- passphrase checks: a live match indicator for the repeat field, a warning for
+  a leading or trailing space, and a Caps Lock warning (also when unpacking)
 - delete the originals once the new file has been read back and verified
 
 When extracting:

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -68,7 +69,8 @@ func TestRoundTripKeepsStructure(t *testing.T) {
 	if st, err := os.Stat(filepath.Join(out, "proj", "empty")); err != nil || !st.IsDir() {
 		t.Error("empty directory was not kept")
 	}
-	if st, _ := os.Stat(filepath.Join(out, "proj", "sub", "b.bin")); st.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits to compare.
+	if st, _ := os.Stat(filepath.Join(out, "proj", "sub", "b.bin")); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, want 0600", st.Mode().Perm())
 	}
 }

@@ -11,8 +11,10 @@ Both the packer and the generated executables work on Windows, Linux and macOS
 
 1. Run the packer. A page opens in your browser (served from the program
    itself on your own computer) where you browse for files and
-   folders, set a passphrase and pick the output location.
-2. The packer writes a single executable. Send it to anyone.
+   folders, set a passphrase and pick the output location. If no browser opens,
+   copy the address the program prints. It works once.
+2. The packer writes a single executable and shows its SHA-256. Send both to
+   the recipient, the hash over a different channel than the file.
 3. Running that executable opens a similar page. Enter the passphrase, choose a
    destination, and the files come out with their folder structure intact.
 
@@ -21,12 +23,23 @@ supported platforms, for example a Windows `.exe` made on Linux.
 
 ## Screenshots
 
-Packing a folder and a file into `project-backup`:
+Packing a folder and a file into `project-backup`. The passphrase section
+checks that both entries match:
 
 ![The packer](docs/screenshots/packer.png)
 
-Running `project-backup` on another machine. The contents can be previewed
-once the passphrase is entered:
+The passphrase fields warn about Caps Lock and mismatched entries while you
+type:
+
+![Passphrase warnings](docs/screenshots/passphrase-warnings.png)
+
+When the file has been written and read back, the packer shows where it is and
+its SHA-256, which is worth sharing with the recipient separately:
+
+![The packer after creating the file](docs/screenshots/packer-done.png)
+
+Running `project-backup` on another machine. The contents can be previewed once
+the passphrase is entered:
 
 ![The unpacker with a content preview](docs/screenshots/unpacker.png)
 
@@ -43,13 +56,15 @@ When packing:
 - optional keyfile that is needed in addition to the passphrase
 - passphrase checks: a live match indicator for the repeat field, a warning for
   a leading or trailing space, and a Caps Lock warning (also when unpacking)
-- delete the originals once the new file has been read back and verified
+- delete the originals once the new file has been read back and verified (only
+  what was stored, and never if anything was skipped)
 
 When extracting:
 
 - preview the contents before extracting
 - what to do if a file already exists: keep both, skip, or overwrite
 - restore dates and permissions (on by default)
+- the passphrase field is cleared after a successful extract
 
 Both programs also have a command line mode for scripts and remote machines:
 
@@ -57,8 +72,8 @@ Both programs also have a command line mode for scripts and remote machines:
     ./backup.run -list
     ./backup.run -dest ~/restored -conflict skip
 
-The passphrase is read from the terminal, or from `OUROBOROS_PASSPHRASE`. Run
-either program with `-h` for all flags.
+The passphrase is read from the terminal, or from `OUROBOROS_PASSPHRASE`, which
+is cleared once it has been read. Run either program with `-h` for all flags.
 
 ## Security design
 
@@ -153,15 +168,51 @@ Needs Go 1.26 or newer.
 `go build ./cmd/ouroboros` works too, but that packer will not have any
 unpackers to embed until `build.sh` has run once.
 
+Builds are reproducible: the same commit and Go version give identical bytes.
+`build.sh` also writes a checksum list for the embedded unpackers, and the
+packer refuses to use one that does not match it.
+
 ## Releases
 
 The `release` workflow builds the downloads: a `.tar.gz` for Linux, a `.zip`
 for Windows, and a `.dmg` for macOS holding a universal (Intel and Apple
 silicon) binary. Run it from the Actions tab, or push a tag like `v0.1.0` to
-publish the files on a GitHub release.
+publish the files on a GitHub release together with `SHA256SUMS` and a GitHub
+build attestation.
 
-On macOS the first launch of the unsigned binary needs a right click, Open, to
-get past Gatekeeper.
+### Verifying a download
+
+    sha256sum -c SHA256SUMS --ignore-missing
+    gh attestation verify ouroboros-linux-amd64.tar.gz --repo mattlalumiere/ouroboros
+
+### Code signing
+
+The programs are **not code signed yet**, so the operating systems will warn
+the first time you run them. Check the checksum first, then:
+
+- **Windows:** SmartScreen shows "Windows protected your PC". Choose "More
+  info", then "Run anyway".
+- **macOS:** try to open it once, then open System Settings, Privacy &
+  Security, and choose "Open Anyway" next to the message about the program.
+  (Control-click, Open no longer works on current macOS versions.) From a
+  terminal, `xattr -d com.apple.quarantine <file>` does the same.
+- **Linux:** no warning, but the file needs to be executable: `chmod +x <file>`.
+
+Files created by the packer are made on your own computer, so they cannot carry
+the project's signature, and they will show the same warnings on a recipient's
+Windows or macOS machine. Attaching the archive also changes the file, which
+would invalidate a Windows signature that was applied to the unpacker beforehand.
+Signing the finished file with your own certificate is the way around that.
+
+## Limits
+
+- Symbolic links and special files (sockets, devices) are skipped while
+  packing and listed as warnings.
+- Ownership is not stored. Permissions and modification times are.
+- The executables are around 8 MB because they contain the web interface and
+  the crypto code.
+- The archive has to stay at the very end of the file, so a signature cannot
+  be added after the fact by tools that append to the file.
 
 ## Layout
 
@@ -172,3 +223,4 @@ get past Gatekeeper.
     internal/stubs     embedded unpackers for every platform
     internal/app       shared workflows for the web and command line modes
     internal/web       local server and the browser pages
+    docs/screenshots   images used in this file

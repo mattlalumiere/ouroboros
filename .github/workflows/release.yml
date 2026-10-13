@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    # Pushing a branch with this prefix builds everything without publishing,
+    # which is a safe way to try the release before tagging it.
+    branches: ["release-check/**"]
 
 permissions:
   contents: read

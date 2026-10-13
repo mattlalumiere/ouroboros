@@ -161,7 +161,7 @@ func Pack(req PackRequest, progress func(archive.Progress)) (string, []string, e
 		warnings = append(warnings, deleteArchived(res)...)
 	}
 	sum, size := fingerprint(out)
-	return fmt.Sprintf("Created %s (%s). %d files and %d folders packed for %s. SHA-256: %s",
+	return fmt.Sprintf("Created %s (%s). %d files and %d folders packed for %s.\nSHA-256: %s",
 		out, humanSize(size), res.Files, res.Dirs, target, sum), warnings, nil
 }
 

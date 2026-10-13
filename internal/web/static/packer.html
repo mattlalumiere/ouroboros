@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="token" content="{{TOKEN}}">
+<title>Ouroboros packer</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h1>Ouroboros packer</h1>
+  <p class="sub">Pick files and folders, set a passphrase, and get one executable that unpacks itself.</p>
+
+  <section>
+    <h2>1. What to pack</h2>
+    <div id="browser"></div>
+    <div class="chips" id="chips"></div>
+    <div class="hint" id="count">Tick the files and folders you want. Folders keep their full structure.</div>
+  </section>
+
+  <section>
+    <h2>2. Passphrase</h2>
+    <div class="cols">
+      <div><label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="new-password"></div>
+      <div><label for="pw2">Repeat passphrase</label><input id="pw2" type="password" autocomplete="new-password"></div>
+    </div>
+    <label class="inline"><input type="checkbox" id="show"> Show passphrase</label>
+    <div class="hint" id="pwhint">The passphrase cannot be recovered. If you lose it, the data is gone.</div>
+    <label>Keyfile (optional)</label>
+    <div class="row">
+      <input type="text" id="keyfile" readonly placeholder="None">
+      <button type="button" id="pickkey">Choose...</button>
+      <button type="button" id="clearkey">Clear</button>
+    </div>
+    <div class="hint">If set, the keyfile is needed as well as the passphrase when unpacking.</div>
+  </section>
+
+  <section>
+    <h2>3. Output</h2>
+    <div class="cols">
+      <div><label for="level">Compression</label>
+        <select id="level">
+          <option value="fast">Fast</option>
+          <option value="default" selected>Balanced</option>
+          <option value="better">Smaller</option>
+          <option value="best">Smallest (slow)</option>
+        </select></div>
+      <div><label for="target">Runs on</label><select id="target"></select></div>
+    </div>
+    <label for="outdir">Save to</label>
+    <div class="row"><input type="text" id="outdir" readonly><button type="button" id="pickout">Browse...</button></div>
+    <label for="outname">File name</label>
+    <input type="text" id="outname" value="secure-archive">
+    <div class="hint" id="outpreview"></div>
+    <label class="inline"><input type="checkbox" id="del"> Delete the originals after the new file has been checked</label>
+  </section>
+
+  <section>
+    <div class="row">
+      <button class="primary" id="go" type="button">Create executable</button>
+      <span style="flex:1"></span>
+      <span id="quitslot"></span>
+    </div>
+    <div id="prog"></div>
+    <div id="msg"></div>
+  </section>
+</main>
+<script src="/static/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let info;
+
+const browser = new Browser($('browser'), { mode: 'multi', onChange: refreshSel });
+
+function refreshSel() {
+  const paths = browser.value;
+  $('chips').replaceChildren(...paths.map(p => el('span', { class: 'chip', title: p },
+    el('span', {}, p), el('button', { type: 'button', 'aria-label': 'Remove', onclick: () => browser.deselect(p) }, '×'))));
+  $('count').textContent = paths.length ? `${paths.length} selected` : 'Tick the files and folders you want. Folders keep their full structure.';
+}
+
+function targetObj() { const [os, arch] = $('target').value.split('/'); return { os, arch }; }
+function outPreview() {
+  const t = targetObj();
+  const ext = t.os === 'windows' ? '.exe' : '';
+  let n = $('outname').value.trim() || 'secure-archive';
+  if (ext && !n.toLowerCase().endsWith(ext)) n += ext;
+  $('outpreview').textContent = $('outdir').value ? 'Will create ' + $('outdir').value + (info.sep) + n : '';
+}
+
+$('show').onchange = e => { $('pw').type = $('pw2').type = e.target.checked ? 'text' : 'password'; };
+$('pw').oninput = () => {
+  const n = $('pw').value.length;
+  $('pwhint').textContent = n && n < 12 ? 'Short passphrases are easier to guess. Twelve or more characters is a good target.' : 'The passphrase cannot be recovered. If you lose it, the data is gone.';
+};
+$('pickkey').onclick = async () => { const p = await pick({ mode: 'file', title: 'Choose a keyfile', start: info.home }); if (p) $('keyfile').value = p; };
+$('clearkey').onclick = () => { $('keyfile').value = ''; };
+$('pickout').onclick = async () => { const p = await pick({ mode: 'dir', title: 'Where should the executable be saved?', start: $('outdir').value }); if (p) { $('outdir').value = p; outPreview(); } };
+$('outname').oninput = outPreview;
+$('target').onchange = outPreview;
+$('quitslot').append(quitButton());
+
+(async () => {
+  info = await api('/api/info');
+  for (const t of info.targets) $('target').append(el('option', { value: t.os + '/' + t.arch, selected: t.os === info.host.os && t.arch === info.host.arch }, `${info.names[t.os] || t.os} ${t.arch}`));
+  $('outdir').value = info.outDir;
+  outPreview();
+})().catch(e => { $('msg').className = 'error'; $('msg').textContent = e.message; });
+
+$('go').onclick = async () => {
+  const msg = $('msg');
+  msg.className = ''; msg.textContent = '';
+  const paths = browser.value;
+  if (!paths.length) return fail('Pick at least one file or folder first.');
+  if (!$('pw').value) return fail('Enter a passphrase.');
+  if ($('pw').value !== $('pw2').value) return fail('The two passphrases do not match.');
+  if ($('del').checked && !confirm('The originals will be permanently deleted once the new file is verified. Continue?')) return;
+
+  $('go').disabled = true;
+  const t = targetObj();
+  try {
+    await api('/api/pack', {
+      paths, passphrase: $('pw').value, keyfile: $('keyfile').value, level: $('level').value,
+      os: t.os, arch: t.arch, outDir: $('outdir').value, outName: $('outname').value.trim(),
+      deleteOriginals: $('del').checked,
+    });
+  } catch (e) { $('go').disabled = false; return fail(e.message); }
+
+  const draw = progressView($('prog'));
+  const s = await watchJob(draw);
+  $('go').disabled = false;
+  if (s.state === 'error') return fail(s.message);
+  draw({ progress: { Total: 1, Bytes: 1, Files: 0 } });
+  msg.className = 'ok';
+  msg.textContent = s.message;
+  if (s.warnings && s.warnings.length) msg.append(el('div', { class: 'small' }, s.warnings.join('\n')));
+  $('pw').value = $('pw2').value = '';
+};
+function fail(text) { $('msg').className = 'error'; $('msg').textContent = text; }
+</script>
+</body>
+</html>

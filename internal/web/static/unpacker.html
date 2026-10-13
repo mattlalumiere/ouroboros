@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="token" content="{{TOKEN}}">
+<title>Ouroboros unpacker</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h1>Unlock and extract</h1>
+  <p class="sub">This file holds an encrypted archive. Enter the passphrase and choose where the files should go.</p>
+
+  <section>
+    <label for="pw">Passphrase</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <label class="inline"><input type="checkbox" id="show"> Show passphrase</label>
+    <div id="keyblock" hidden>
+      <label>Keyfile (required for this archive)</label>
+      <div class="row"><input type="text" id="keyfile" readonly placeholder="None chosen"><button type="button" id="pickkey">Choose...</button></div>
+    </div>
+  </section>
+
+  <section>
+    <label for="dest">Extract to</label>
+    <div class="row"><input type="text" id="dest" readonly><button type="button" id="pickdest">Browse...</button></div>
+    <div class="cols">
+      <div><label for="conflict">If a file already exists</label>
+        <select id="conflict">
+          <option value="rename">Keep both (add a number)</option>
+          <option value="skip">Skip it</option>
+          <option value="overwrite">Overwrite it</option>
+        </select></div>
+      <div><label class="inline" style="margin-top:34px"><input type="checkbox" id="modes" checked> Restore dates and permissions</label></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <button class="primary" id="go" type="button">Extract</button>
+      <button id="preview" type="button">Preview contents</button>
+      <span style="flex:1"></span>
+      <span id="quitslot"></span>
+    </div>
+    <div id="prog"></div>
+    <div id="msg"></div>
+    <div id="tree"></div>
+  </section>
+</main>
+<script src="/static/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let info;
+
+$('show').onchange = e => { $('pw').type = e.target.checked ? 'text' : 'password'; };
+$('pickkey').onclick = async () => { const p = await pick({ mode: 'file', title: 'Choose the keyfile', start: info.home }); if (p) $('keyfile').value = p; };
+$('pickdest').onclick = async () => { const p = await pick({ mode: 'dir', title: 'Where should the files be extracted?', start: $('dest').value }); if (p) $('dest').value = p; };
+$('quitslot').append(quitButton());
+
+(async () => {
+  info = await api('/api/info');
+  $('dest').value = info.dest;
+  $('keyblock').hidden = !info.needsKeyfile;
+})().catch(e => fail(e.message));
+
+function fail(text) { $('msg').className = 'error'; $('msg').textContent = text; }
+function reset() { $('msg').className = ''; $('msg').textContent = ''; $('tree').replaceChildren(); }
+function creds() { return { passphrase: $('pw').value, keyfile: $('keyfile').value }; }
+
+$('preview').onclick = async () => {
+  reset();
+  if (!$('pw').value) return fail('Enter the passphrase.');
+  $('preview').disabled = true;
+  $('msg').textContent = 'Unlocking...';
+  try {
+    const items = await api('/api/list', creds());
+    $('msg').textContent = `${items.length} entries`;
+    const rows = items.map(i => el('tr', {}, el('td', {}, i.path + (i.isDir ? '/' : '')), el('td', { class: 'num' }, i.isDir ? '' : fmtSize(i.size))));
+    $('tree').append(el('div', { class: 'tree' }, el('table', {}, el('tbody', {}, rows))));
+  } catch (e) { fail(e.message); }
+  $('preview').disabled = false;
+};
+
+$('go').onclick = async () => {
+  reset();
+  if (!$('pw').value) return fail('Enter the passphrase.');
+  if (info.needsKeyfile && !$('keyfile').value) return fail('Choose the keyfile first.');
+  $('go').disabled = $('preview').disabled = true;
+  $('msg').textContent = 'Unlocking...';
+  try {
+    await api('/api/extract', { ...creds(), dest: $('dest').value, conflict: $('conflict').value, keepModes: $('modes').checked });
+  } catch (e) { $('go').disabled = $('preview').disabled = false; return fail(e.message); }
+  const draw = progressView($('prog'));
+  const s = await watchJob(draw);
+  $('go').disabled = $('preview').disabled = false;
+  $('msg').textContent = '';
+  if (s.state === 'error') return fail(s.message);
+  draw({ progress: { Total: 1, Bytes: 1, Files: 0 } });
+  $('msg').className = 'ok';
+  $('msg').textContent = s.message;
+  if (s.warnings && s.warnings.length) $('msg').append(el('div', { class: 'small' }, s.warnings.join('\n')));
+};
+</script>
+</body>
+</html>

@@ -214,6 +214,11 @@ Signing the finished file with your own certificate is the way around that.
 - The archive has to stay at the very end of the file, so a signature cannot
   be added after the fact by tools that append to the file.
 
+## License
+
+MIT, see [LICENSE](LICENSE). The programs include code from a few other
+modules, whose licenses are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
 ## Layout
 
     cmd/ouroboros      the packer

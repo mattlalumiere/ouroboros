@@ -54,7 +54,8 @@ a file. Ideas for using public keys instead of, or as well as, the passphrase:
 
 ## Testing and platforms
 
-- Run the Windows and macOS builds on real machines. So far only Linux has
+- Run the Windows and macOS builds on real machines. CI now builds natively on
+  Windows and does a pack and unpack there, but nobody has used the result by hand. So far only Linux has
   been run, the others are cross compiled.
 - Check that a macOS binary still runs after the archive is attached to it,
   including on Apple silicon.

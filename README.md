@@ -159,18 +159,33 @@ Does not protect against:
 
 Needs Go 1.26 or newer.
 
+On Linux and macOS:
+
     ./build.sh          # all six platforms into dist/
     ./build.sh host     # only the packer for this machine
-    go test ./...
 
-`build.sh` builds the unpacker for each platform first, compresses it into
+On Windows, from PowerShell or a normal command prompt:
+
+    .\build.ps1         # all six platforms into dist\
+    .\build.ps1 host    # only the packer for this machine
+    build.cmd host      # same thing, from cmd.exe, no policy change needed
+
+If PowerShell refuses to run the script, use `build.cmd`, which starts it with
+the execution policy bypassed for that one run. Git Bash and WSL can use
+`build.sh` as well. If `./build.sh` fails with `bash\r: No such file or
+directory`, the checkout has Windows line endings, see `.gitattributes`.
+
+Then run the tests with `go test ./...`.
+
+The script builds the unpacker for each platform first, compresses it into
 `internal/stubs/bin`, and then builds the packer with those embedded. Plain
 `go build ./cmd/ouroboros` works too, but that packer will not have any
-unpackers to embed until `build.sh` has run once.
+unpackers to embed until a build script has run once.
 
-Builds are reproducible: the same commit and Go version give identical bytes.
-`build.sh` also writes a checksum list for the embedded unpackers, and the
-packer refuses to use one that does not match it.
+Builds are reproducible: the same commit and Go version give identical bytes,
+and both scripts produce the same result because they share the helper in
+`tools/stubpack`. The helper also writes a checksum list for the embedded
+unpackers, and the packer refuses to use one that does not match it.
 
 ## Releases
 
@@ -233,4 +248,5 @@ modules, whose licenses are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md
     internal/stubs     embedded unpackers for every platform
     internal/app       shared workflows for the web and command line modes
     internal/web       local server and the browser pages
+    tools/stubpack     build helper used by build.sh and build.ps1
     docs/screenshots   images used in this file

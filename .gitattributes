@@ -1,0 +1,6 @@
+# Keep line endings stable, whatever the Git settings of the person cloning.
+* text=auto
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.png binary
